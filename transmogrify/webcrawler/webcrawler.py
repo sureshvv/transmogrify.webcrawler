@@ -162,6 +162,8 @@ class WebCrawler(object):
         self.checkext  = options.get('checkext', CHECKEXT)
         self.verbose   = options.get('verbose', VERBOSE)
         self.maxpage   = options.get('maxsize', None)
+        self.nskip   = int(options.get('nskip', 0))
+        self.skipped = 0
         self.nonames   = options.get('nonames', NONAMES)
         self.site_url  = options.get('site_url', options.get('url', None))
         self.starts    = [u for u in options.get('start-urls', '').strip().split() if u]
@@ -176,6 +178,19 @@ class WebCrawler(object):
             self.site_url = 'file://'+urllib.pathname2url(self.site_url)
 
     def __iter__(self):
+        gen = self.__myiter__()
+        log_rc = lambda rc: '_bad_url' in rc and 'BAD '+rc['_bad_url'] or rc['_site_url']+rc['_path']
+        while self.skipped < self.nskip:
+            rc = gen.next()
+            self.skipped += 1
+            self.logger.debug("SKIPPER Skipping: %d %s" % (self.skipped, log_rc(rc)))
+        while 1:
+            rc = gen.next()
+            self.skipped += 1
+            self.logger.debug("SKIPPER Returning: %d %s" % (self.skipped, log_rc(rc)))
+            yield rc
+
+    def __myiter__(self):
         for item in self.previous:
             yield item
 
@@ -186,8 +201,14 @@ class WebCrawler(object):
 
         def pagefactory(text, url, verbose=VERBOSE, maxpage=MAXPAGE, checker=None):
 
+            from lxml.etree import XMLSyntaxError
             try:
                 page = LXMLPage(text,url,verbose,maxpage,checker,options,self.logger)
+            except XMLSyntaxError:
+                from pympler import tracker
+                tr = tracker.SummaryTracker()
+                tr.print_diff()
+                raise
             except HTMLParseError, msg:
                 #msg = self.sanitize(msg)
                 ##elf.note(0, "Error parsing %s: %s",
@@ -298,7 +319,11 @@ class WebCrawler(object):
                         if self.feedback:
                             self.feedback.success('webcrawler',msg)
                         ctype = item.get('_content_info',{}).get('content-type','')
-                        csize = item.get('_content_info',{}).get('content-length',0)
+                        try:
+                            mysize = len(item['_content'])
+                        except AttributeError:
+                            mysize = 'Unknown'
+                        csize = item.get('_content_info',{}).get('content-length', mysize)
                         date = item.get('_content_info',{}).get('date','')
                         self.logger.info("Crawled: %s (%d links, size=%s, %s %s)" % (
                             str(url),
@@ -450,7 +475,7 @@ class LXMLPage:
             info = self.checker.infos.get(url)
             try:
                 http_charset = info.getheader('Content-Type').split('charset=')[1]
-            except:
+            except AttributeError:
                 http_charset = ""
             if http_charset == "":
                 ud = UnicodeDammit(text, is_html=True)

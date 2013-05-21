@@ -460,6 +460,7 @@ class Checker:
                 self.todo[url].append(origin)
             self.note(3, "  Seen todo link %s", self.format_url(url))
         else:
+            url = self.strip_dots(url[0]), url[1]
             self.todo[url] = [origin]
             self.note(3, "  New todo link %s", self.format_url(url))
 
@@ -467,6 +468,18 @@ class Checker:
         link, fragment = url
         if fragment: return link + "#" + fragment
         else: return link
+
+    def strip_dots(self, url):
+        while True:
+            url_parts = url.split('/')
+            if '..' not in url_parts:
+                break
+            i1 = url_parts.index('..')
+            if i1 < 2:
+                url = '/'.join(url_parts[i1+1:])
+            else:
+                url = '/'.join(url_parts[:i1-1] + url_parts[i1+1:])
+        return url
 
     def markdone(self, url):
         self.done[url] = self.todo[url]
@@ -585,9 +598,12 @@ class Checker:
             origins = self.todo[url]
         except KeyError:
             origins = self.done[url]
-        for source, rawlink in origins:
-            triple = url, rawlink, self.bad[url]
-            self.seterror(source, triple)
+        try:
+            for source, rawlink in origins:
+                triple = url, rawlink, self.bad[url]
+                self.seterror(source, triple)
+        except ValueError:
+            pass
 
     def seterror(self, url, triple):
         try:

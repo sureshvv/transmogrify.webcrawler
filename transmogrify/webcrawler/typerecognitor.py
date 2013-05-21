@@ -99,7 +99,8 @@ class TypeRecognitor(object):
         #give some helpful summary
         for key,value in sorted(recognized.items()):
             _type, mime = key
-            self.logger.info("%s, %s: %d" % (_type,mime, len(value)))
+            for v in value:
+                self.logger.info("%s, %s: %s" % (_type,mime, (v['_path'], v['_orig_path'])))
 
 
 
