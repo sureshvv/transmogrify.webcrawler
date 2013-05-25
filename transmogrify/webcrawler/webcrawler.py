@@ -13,7 +13,7 @@ import re
 from htmlentitydefs import entitydefs
 from bs4 import UnicodeDammit
 import urllib,os, urlparse
-from sys import stderr
+import sys
 import urlparse
 import logging
 from ConfigParser import ConfigParser
@@ -143,7 +143,6 @@ NONAMES = 0         # Force name anchor checking
 
 
 
-
 class WebCrawler(object):
     classProvides(ISectionBlueprint)
     implements(ISection)
@@ -167,7 +166,7 @@ class WebCrawler(object):
         self.nonames   = options.get('nonames', NONAMES)
         self.site_url  = options.get('site_url', options.get('url', None))
         self.starts    = [u for u in options.get('start-urls', '').strip().split() if u]
-        self.max = options.get('max',None)
+        self.max = int(options.get('max',0))
         self.cache = options.get('cache', None)
         self.context = transmogrifier.context
         #self.alias_bases  = [a for a in options.get('alias_bases', '').split() if a]
@@ -177,13 +176,28 @@ class WebCrawler(object):
         if os.path.exists(self.site_url):
             self.site_url = 'file://'+urllib.pathname2url(self.site_url)
 
+        #self.tracker = ClassTracker()
+
     def __iter__(self):
         gen = self.__myiter__()
         log_rc = lambda rc: '_bad_url' in rc and 'BAD '+rc['_bad_url'] or rc['_site_url']+rc['_path']
-        while self.skipped < self.nskip:
-            rc = gen.next()
-            self.skipped += 1
-            self.logger.debug("SKIPPER Skipping: %d %s" % (self.skipped, log_rc(rc)))
+        if self.nskip:
+            nstarts = len(self.starts)
+            for x1 in range(nstarts):
+                rc = gen.next()
+                self.logger.debug("SKIPPER Returning: %d %s" % (self.skipped, log_rc(rc)))
+                yield rc
+            while self.skipped < self.nskip:
+                rc = gen.next()
+                self.skipped += 1
+                self.logger.debug("SKIPPER Skipping: %d %s" % (self.skipped, log_rc(rc)))
+                if (self.skipped % 1000) == 0:
+                    self.checker.link_names = {}
+                    self.checker.sortorder = {}
+                    self.checker.name_table = {}
+            self.checker.link_names = {}
+            self.checker.sortorder = {}
+            self.checker.name_table = {}
         while 1:
             rc = gen.next()
             self.skipped += 1
@@ -201,14 +215,8 @@ class WebCrawler(object):
 
         def pagefactory(text, url, verbose=VERBOSE, maxpage=MAXPAGE, checker=None):
 
-            from lxml.etree import XMLSyntaxError
             try:
                 page = LXMLPage(text,url,verbose,maxpage,checker,options,self.logger)
-            except XMLSyntaxError:
-                from pympler import tracker
-                tr = tracker.SummaryTracker()
-                tr.print_diff()
-                raise
             except HTMLParseError, msg:
                 #msg = self.sanitize(msg)
                 ##elf.note(0, "Error parsing %s: %s",
@@ -230,6 +238,8 @@ class WebCrawler(object):
         self.checker.ignore_robots = options.get('ignore_robots', "false").lower() in ['true','on']
 
         self.checker.resetRun()
+        #self.tracker.create_snapshot()
+
         #must take off the '/' for the crawler to work
         self.checker.addroot(self.site_url[:-1])
         self.checker.sortorder[self.site_url] = 0
@@ -246,13 +256,13 @@ class WebCrawler(object):
         self.checker.todo[root[0]] = root[1]
 
 
-
         #for root in self.alias_bases:
         #    self.checker.addroot(root, add_to_do = 0)
         #    self.checker.sortorder[root] = 0
 
         while self.checker.todo:
-            if self.max and len(self.checker.done) == int(self.max):
+            #import pdb; pdb.set_trace();
+            if self.max and len(self.checker.done) >= self.max:
                 break
             urls = self.checker.todo.keys()
             #urls.sort()
@@ -260,7 +270,14 @@ class WebCrawler(object):
             for url,part in urls:
                 if 'what-makes-it-tick' in url:
                     import pdb; pdb.set_trace();
-
+                url1 = url.lstrip('http://').split('/')
+                if url1[0] in self.site_url:
+                    url2 = url1[0].split('.')
+                    if len(url2) == 2 and url2[0] != 'www':
+                        url2.insert(0, 'www')
+                        url2 = '.'.join(url2)
+                        url1[0] = 'http://' + url2
+                        url = '/'.join(url1)
                 if not url.startswith(self.site_url[:-1]):
                     self.checker.markdone((url,part))
                     self.logger.debug("External: %s" %str(url))
@@ -482,9 +499,8 @@ class LXMLPage:
             else:
                 ud = UnicodeDammit(text, override_encodings=[http_charset], is_html=True)
             if not ud.unicode_markup:
-                raise UnicodeDecodeError(
-                    "Failed to detect encoding, tried [%s]",
-                    ', '.join(converted.triedEncodings))
+                self.logger.error("Failed to detect encoding, %s"%url)
+                pass
             # print converted.originalEncoding
             # we shouldn't decode to unicode first http://lxml.de/parsing.html#python-unicode-strings
             # but we will try it anyway. If there is a conflict we get a ValueError

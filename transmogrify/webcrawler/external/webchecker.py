@@ -482,9 +482,12 @@ class Checker:
         return url
 
     def markdone(self, url):
-        self.done[url] = self.todo[url]
-        del self.todo[url]
-        self.changed = 1
+        try:
+            self.done[url] = self.todo[url]
+            del self.todo[url]
+            self.changed = 1
+        except KeyError:
+            pass
 
     def inroots(self, url):
         for root in self.roots:
