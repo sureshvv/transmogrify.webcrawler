@@ -4,7 +4,7 @@ from collective.transmogrifier.interfaces import ISection
 import logging
 import os
 import sys
-from pickle import dump, load
+from pickle import dump, load, PicklingError
 
 
 """
@@ -39,6 +39,8 @@ class SerializerSection(object):
             raise AttributeError, "action has to be save or restore"
         self.directory = options.get('directory')
         self.logger = logging.getLogger(name)
+        if not os.access(self.directory, os.F_OK):
+            os.makedirs(self.directory)
 
     def __iter__(self):
         if self.action == 'save':
@@ -54,14 +56,40 @@ class SerializerSection(object):
             fp = open('%s/%s' % (self.directory, x))
             item = load(fp)
             fp.close()
+            item_type = item.get('_type', None)
+            if item_type == 'Image':
+                fp = open('%s/image.%s' % (self.directory, item['image']))
+                item['image'] = fp.read()
+                fp.close()
+            elif item_type == 'File':
+                fp = open('%s/file.%s' % (self.directory, item['file']))
+                item['file'] = fp.read()
+                fp.close()
             self.logger.debug("Serializer returning: %d %s" % (x, item))
             yield item
 
     def save(self):
         n_item = 0
+        n_image = 0
         for item in self.previous:
             fp = open('%s/%s' % (self.directory, n_item), 'w')
-            dump(item, fp)
+            item_type = item.get('_type', None)
+            if item_type == 'Image':
+                fp1 = open('%s/image.%s' % (self.directory, n_image), 'w')
+                fp1.write(item['image'].read())
+                fp1.close()
+                item['image'] = n_image
+                n_image += 1
+            elif item_type == 'File':
+                fp1 = open('%s/file.%s' % (self.directory, n_image), 'w')
+                fp1.write(item['file'].read())
+                fp1.close()
+                item['file'] = n_image
+                n_image += 1
+            try:
+                dump(item, fp)
+            except PicklingError:
+                self.logger.error("Serializer pickling: %s" % (item,))
             fp.close()
             n_item += 1
             self.logger.debug("Serializer saving: %d %s" % (n_item, item))

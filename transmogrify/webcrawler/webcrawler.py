@@ -162,7 +162,7 @@ class WebCrawler(object):
         self.verbose   = options.get('verbose', VERBOSE)
         self.maxpage   = options.get('maxsize', None)
         self.nskip   = int(options.get('nskip', 0))
-        self.skipped = 0
+        self.processed = 0
         self.nonames   = options.get('nonames', NONAMES)
         self.site_url  = options.get('site_url', options.get('url', None))
         self.starts    = [u for u in options.get('start-urls', '').strip().split() if u]
@@ -185,23 +185,27 @@ class WebCrawler(object):
             nstarts = len(self.starts)
             for x1 in range(nstarts):
                 rc = gen.next()
-                self.logger.debug("SKIPPER Returning: %d %s" % (self.skipped, log_rc(rc)))
+                self.logger.debug("SKIPPER Returning: %d %s" % (self.processed, log_rc(rc)))
                 yield rc
-            while self.skipped < self.nskip:
+            while self.processed < self.nskip:
                 rc = gen.next()
-                self.skipped += 1
-                self.logger.debug("SKIPPER Skipping: %d %s" % (self.skipped, log_rc(rc)))
-                if (self.skipped % 1000) == 0:
+                self.processed += 1
+                self.logger.debug("SKIPPER Skipping: %d %s" % (self.processed, log_rc(rc)))
+                if (self.processed % 1000) == 0:
                     self.checker.link_names = {}
                     self.checker.sortorder = {}
                     self.checker.name_table = {}
             self.checker.link_names = {}
             self.checker.sortorder = {}
             self.checker.name_table = {}
+            if self.max:
+                self.max += self.nskip
         while 1:
+            if self.max and self.processed > self.max:
+                break
             rc = gen.next()
-            self.skipped += 1
-            self.logger.debug("SKIPPER Returning: %d %s" % (self.skipped, log_rc(rc)))
+            self.processed += 1
+            self.logger.debug("SKIPPER Returning: %d %s" % (self.processed, log_rc(rc)))
             yield rc
 
     def __myiter__(self):
@@ -261,8 +265,7 @@ class WebCrawler(object):
         #    self.checker.sortorder[root] = 0
 
         while self.checker.todo:
-            #import pdb; pdb.set_trace();
-            if self.max and len(self.checker.done) >= self.max:
+            if self.max and len(self.checker.done) > self.max:
                 break
             urls = self.checker.todo.keys()
             #urls.sort()
@@ -277,7 +280,11 @@ class WebCrawler(object):
                         url2.insert(0, 'www')
                         url2 = '.'.join(url2)
                         url1[0] = 'http://' + url2
-                        url = '/'.join(url1)
+                        url_www = '/'.join(url1)
+                        if (url_www, part) not in self.checker.done and (url_www, part) not in self.checker.todo:
+                            self.checker.todo[(url_www, part)] = self.checker.todo[(url, part)]
+                        self.checker.markdone((url,part))
+                        continue
                 if not url.startswith(self.site_url[:-1]):
                     self.checker.markdone((url,part))
                     self.logger.debug("External: %s" %str(url))
@@ -293,10 +300,14 @@ class WebCrawler(object):
                     origin = url
                     url = self.checker.redirected.get(url,url)
                     names = self.checker.link_names.get(url,[])
-                    path = url[len(self.site_url):]
-                    path = '/'.join([p for p in path.split('/') if p])
                     info = self.checker.infos.get(url)
                     file = self.checker.files.get(url)
+                    if url.startswith('file:'):
+                        path = origin[len(self.site_url)-1:]
+                        url = origin
+                    else:
+                        path = url[len(self.site_url)-1:]
+                    path = '/'.join([p for p in path.split('/') if p])
                     sortorder = self.checker.sortorder.get(origin,0)
                     text = page and page.html() or file
 
@@ -308,7 +319,6 @@ class WebCrawler(object):
                             # we've been redirected. emit a redir item so we can put in place redirect
                             orig_path = origin[len(self.site_url):]
                             orig_path = '/'.join([p for p in orig_path.split('/') if p])
-                            #import pdb; pdb.set_trace()
                             if orig_path:
                                 # unquote the url as plone id does not support % or + but do support space
                                 orig_path = urllib.unquote_plus(orig_path)
@@ -342,7 +352,10 @@ class WebCrawler(object):
                             mysize = 'Unknown'
                         csize = item.get('_content_info',{}).get('content-length', mysize)
                         date = item.get('_content_info',{}).get('date','')
-                        self.logger.info("Crawled: %s (%d links, size=%s, %s %s)" % (
+                        self.logger.info("Crawled: %d(%d,%d) %s (%d links, size=%s, %s %s)" % (
+                            self.processed,
+                            self.nskip,
+                            self.max,
                             str(url),
                             len(item.get('_backlinks',[])),
                             csize,
@@ -578,7 +591,6 @@ class LXMLPage:
         # TODO: should really be counted as redirect not a link
         for tag in self.parser.iterdescendants(tag='meta'):
             if tag.get('http-equiv','').lower() == 'refresh':
-                #import pdb; pdb.set_trace()
                 url = tag.get('content','')
                 if url:
                     _,rawlink = url.lower().split("url=",1)

@@ -455,12 +455,12 @@ class Checker:
     def newtodolink(self, url, origin):
         # Call self.format_url(), since the URL here
         # is now a (URL, fragment) pair.
+        url = self.strip_dots(url[0]), url[1]
         if self.todo.has_key(url):
             if origin not in self.todo[url]:
                 self.todo[url].append(origin)
             self.note(3, "  Seen todo link %s", self.format_url(url))
         else:
-            url = self.strip_dots(url[0]), url[1]
             self.todo[url] = [origin]
             self.note(3, "  New todo link %s", self.format_url(url))
 
@@ -479,15 +479,17 @@ class Checker:
                 url = '/'.join(url_parts[i1+1:])
             else:
                 url = '/'.join(url_parts[:i1-1] + url_parts[i1+1:])
+        url = url.replace('/index.php', '')
+        url1 = url.lstrip('http://').split('/')
+        if len(url1) > 1 and url1[0] == url1[1]:
+            url1 = url[0] + url[2:]
+            url = 'http://' + '/'.join(url1)
         return url
 
     def markdone(self, url):
-        try:
-            self.done[url] = self.todo[url]
-            del self.todo[url]
-            self.changed = 1
-        except KeyError:
-            pass
+        self.done[url] = self.todo[url]
+        del self.todo[url]
+        self.changed = 1
 
     def inroots(self, url):
         for root in self.roots:
