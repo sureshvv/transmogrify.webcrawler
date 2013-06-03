@@ -57,6 +57,7 @@ class SerializerSection(object):
             item = load(fp)
             fp.close()
             item_type = item.get('_type', None)
+            self.logger.debug("Serializer returning: %d %s" % (x, item))
             if item_type == 'Image':
                 fp = open('%s/image.%s' % (self.directory, item['image']))
                 item['image'] = fp.read()
@@ -65,7 +66,6 @@ class SerializerSection(object):
                 fp = open('%s/file.%s' % (self.directory, item['file']))
                 item['file'] = fp.read()
                 fp.close()
-            self.logger.debug("Serializer returning: %d %s" % (x, item))
             yield item
 
     def save(self):

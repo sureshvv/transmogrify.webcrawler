@@ -480,10 +480,18 @@ class Checker:
             else:
                 url = '/'.join(url_parts[:i1-1] + url_parts[i1+1:])
         url = url.replace('/index.php', '')
+        url = url.replace('%%', '%')
         url1 = url.lstrip('http://').split('/')
         if len(url1) > 1 and url1[0] == url1[1]:
             url1 = url[0] + url[2:]
             url = 'http://' + '/'.join(url1)
+        url1 = url.lstrip('http://').split('/')
+        url2 = url1[0].split('.')
+        if len(url2) == 2 and url2[0] != 'www':
+            url2.insert(0, 'www')
+            url2 = '.'.join(url2)
+            url1[0] = 'http://' + url2
+            url = '/'.join(url1)
         return url
 
     def markdone(self, url):

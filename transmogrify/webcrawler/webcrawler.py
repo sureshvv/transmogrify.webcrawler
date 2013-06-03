@@ -201,7 +201,7 @@ class WebCrawler(object):
             if self.max:
                 self.max += self.nskip
         while 1:
-            if self.max and self.processed > self.max:
+            if self.max and self.processed >= self.max:
                 break
             rc = gen.next()
             self.processed += 1
@@ -265,26 +265,12 @@ class WebCrawler(object):
         #    self.checker.sortorder[root] = 0
 
         while self.checker.todo:
-            if self.max and len(self.checker.done) > self.max:
-                break
             urls = self.checker.todo.keys()
             #urls.sort()
             del urls[1:]
             for url,part in urls:
                 if 'what-makes-it-tick' in url:
                     import pdb; pdb.set_trace();
-                url1 = url.lstrip('http://').split('/')
-                if url1[0] in self.site_url:
-                    url2 = url1[0].split('.')
-                    if len(url2) == 2 and url2[0] != 'www':
-                        url2.insert(0, 'www')
-                        url2 = '.'.join(url2)
-                        url1[0] = 'http://' + url2
-                        url_www = '/'.join(url1)
-                        if (url_www, part) not in self.checker.done and (url_www, part) not in self.checker.todo:
-                            self.checker.todo[(url_www, part)] = self.checker.todo[(url, part)]
-                        self.checker.markdone((url,part))
-                        continue
                 if not url.startswith(self.site_url[:-1]):
                     self.checker.markdone((url,part))
                     self.logger.debug("External: %s" %str(url))
