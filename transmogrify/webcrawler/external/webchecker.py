@@ -470,6 +470,20 @@ class Checker:
         else: return link
 
     def strip_dots(self, url):
+        """ this massages the url before stuffing it into the TODO list
+
+            1. If the url has parts like x/../y, it removes the /../ portions
+
+            2. If the url has /index.php/a/b it removes the index.php portions
+
+            3. If the domain name does not contain www, it inserts one
+
+            4. If the url contains %, it adds another %
+
+            5. If the url contains the domain name repeated such as,
+               http:/www.example.com/www.example.com/xx/yy, it removes the second one.
+        """
+
         while True:
             url_parts = url.split('/')
             if '..' not in url_parts:

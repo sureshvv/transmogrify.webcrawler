@@ -304,7 +304,7 @@ class CachingURLopener(urllib.FancyURLopener):
             mtype = mimetypes.guess_type(url)[0]
             headers = mimetools.Message(StringIO(
                 'Content-Type: %s\nContent-Length: %d\nLast-modified: %s\n' %
-                (mtype or 'text/plain', size, modified)))
+                (mtype or 'text/html; charset=utf-8;', size, modified)))
         if not host:
             urlfile = file
             if file[:1] == '/':

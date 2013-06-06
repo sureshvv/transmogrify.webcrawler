@@ -85,6 +85,7 @@ class SerializerSection(object):
                 fp1.write(item['file'].read())
                 fp1.close()
                 item['file'] = n_image
+                item['_content_info'] = ''
                 n_image += 1
             try:
                 dump(item, fp)
